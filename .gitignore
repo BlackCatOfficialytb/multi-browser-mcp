@@ -1,0 +1,6 @@
+#!/bin/sh
+*.log
+.venv/
+__pycache__/
+*.pyc
+proxies.txt
