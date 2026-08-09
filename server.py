@@ -53,10 +53,13 @@ class ProxyManager:
 
 
 class BrowserManager:
-    def __init__(self):
-        self.active_engine: Literal["camoufox", "drissionpage"] = _cfg.browser.engine
-        self.drission_enabled: bool = _cfg.browser.drission_enabled
-        self.drission_headless: bool = _cfg.browser.drission_headless
+    def __init__(self, cfg=None):
+        global _cfg
+        self.cfg = cfg or _cfg
+        self.active_engine: Literal["camoufox", "drissionpage"] = (
+            "camoufox" if self.cfg.camoufox_browser.enabled else "drissionpage"
+        )
+        self.drission_enabled: bool = self.cfg.drissionpage_browser.enabled
         self.proxy = ProxyManager()
         self.proxy.load()
 
@@ -64,12 +67,21 @@ class BrowserManager:
         self.camoufox_browser = None
         self.camoufox_page = None
         self.browser_use_session = None
-        self.browser_use_headless: bool = _cfg.browser_use.headless
+        self.browser_use_headless: bool = self.cfg.browser_use.headless
         self.drission_page: Optional[ChromiumPage] = None
 
     async def init_camoufox(self):
         if not self.camoufox_page:
-            launch = {"headless": False}
+            fb = self.cfg.camoufox_browser
+            launch = {
+                "headless": fb.headless,
+                "geoip": fb.geoip,
+                "humanize": fb.humanize,
+                "locale": fb.locale,
+                "args": fb.args,
+                **fb.options,
+            }
+            launch = {k: v for k, v in launch.items() if v not in (None, "")}
             if self.proxy.spec():
                 launch["proxy"] = self.proxy.spec()
             self.camoufox_cm = AsyncCamoufox(**launch)
@@ -78,7 +90,17 @@ class BrowserManager:
 
     def init_drissionpage(self):
         if not self.drission_page:
+            dp = self.cfg.drissionpage_browser
             co = ChromiumOptions()
+            co.set_headless(dp.headless)
+            if dp.browser_path:
+                co.set_browser_path(dp.browser_path)
+            if dp.user_data_dir:
+                co.set_user_data_path(dp.user_data_dir)
+            if dp.local_port:
+                co.set_local_port(int(dp.local_port))
+            for arg in dp.args:
+                co.set_argument(arg)
             if self.proxy.spec():
                 co.set_proxy(self.proxy.current)
             self.drission_page = ChromiumPage(co)
@@ -125,14 +147,17 @@ mcp = FastMCP("Multi-Browser Automation Server", lifespan=lifespan)
 def build_llm():
     from browser_use.llm.models import ChatOpenAI
 
-    base_url = os.environ.get("NINEROUTER_URL") or os.environ.get("OPENAI_BASE_URL")
-    api_key = os.environ.get("NINEROUTER_KEY") or os.environ.get("OPENAI_API_KEY")
-    model = os.environ.get("BROWSER_USE_MODEL") or os.environ.get("NINEROUTER_MODEL") or _cfg.browser_use.model
+    from config import load_llm_credentials
+
+    base_url, api_key, model = load_llm_credentials(browser_mgr.cfg)
+    if not model:
+        model = browser_mgr.cfg.browser_use.model
     if base_url and not base_url.endswith("/v1"):
         base_url = base_url.rstrip("/") + "/v1"
     if not api_key:
         raise RuntimeError(
-            "Browser Use cần LLM. Đặt OPENAI_API_KEY hoặc NINEROUTER_KEY/NINEROUTER_URL (và BROWSER_USE_MODEL nếu cần)."
+            "Browser Use cần LLM. Đặt OPENAI_API_KEY hoặc NINEROUTER_KEY/NINEROUTER_URL (và BROWSER_USE_MODEL nếu cần), "
+            "hoặc cấu hình credential block trong config.kdl."
         )
     return ChatOpenAI(model=model, api_key=api_key, base_url=base_url)
 
@@ -264,19 +289,21 @@ async def click_element(selector: str) -> str:
 
 
 @mcp.tool()
-async def run_browser_use(task: str, max_steps: int = 25, headless: bool = True) -> str:
+async def run_browser_use(task: str, max_steps: int = 25, headless: Optional[bool] = None) -> str:
     """Chạy một tác vụ tự động bằng AI agent (browser-use).
 
     Agent điều khiển trình duyệt Chromium để hoàn thành tác vụ phức tạp nhiều bước
-    (đăng nhập, điền form, thu thập dữ liệu...). Cần LLM: cấu hình OPENAI_API_KEY
-    hoặc NINEROUTER_KEY + NINEROUTER_URL, tuỳ chọn BROWSER_USE_MODEL.
+    (đăng nhập, điền form, thu thập dữ liệu...). Cần LLM: cấu hình qua credential
+    block trong config.kdl (method config/dotenv/env).
 
     Args:
         task: Mô tả tác vụ cần thực hiện bằng ngôn ngữ tự nhiên.
         max_steps: Số bước tối đa agent được phép thực hiện.
-        headless: True để chạy ẩn, False để hiện cửa sổ browser.
+        headless: True để chạy ẩn, False để hiện cửa sổ browser (mặc định lấy từ config).
     """
     try:
+        if headless is None:
+            headless = browser_mgr.cfg.browser_use.headless
         await browser_mgr.init_browser_use(headless=headless)
         from browser_use import Agent
 

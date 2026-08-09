@@ -1,5 +1,6 @@
 # BrowserMCP server configuration (KDL format)
 # Docs: https://kdl.dev
+# Copy to config.kdl and edit. Values here are defaults.
 
 server {
     host "127.0.0.1"
@@ -7,20 +8,52 @@ server {
     transport "sse"
 }
 
+# Where LLM credentials are read from:
+#   "env"    -> environment variables (NINEROUTER_URL/OPENAI_BASE_URL,
+#               NINEROUTER_KEY/OPENAI_API_KEY, BROWSER_USE_MODEL/NINEROUTER_MODEL)
+#   "dotenv" -> same names, loaded from env_file (a .env file)
+#   "config" -> direct from this block (api_key / base_url / model below)
+credential {
+    method "env"
+    env_file ".env"
+    api_key ""
+    base_url ""
+    model ""
+}
+
 proxy {
     enabled false
     file "proxies.txt"
 }
 
-browser {
-    engine "camoufox"
-    drission_enabled false
-    drission_headless false
+camoufox_browser {
+    enabled true
+    headless false
+    geoip false          # needs the geoip extra: camoufox[geoip] (in requirements.txt)
+    humanize true
+    locale "en-US"
+    args [
+        "--no-sandbox"
+    ]
+    # any extra launch option -> passed to AsyncCamoufox as kwargs (screen, os, ...)
+    options {
+        humanize true
+    }
+}
+
+drissionpage_browser {
+    enabled false
+    headless true
+    browser_path ""
+    user_data_dir ""
+    local_port ""
+    args [
+        "--disable-gpu"
+    ]
 }
 
 browser_use {
     enabled true
-    headless true
+    headless false
     model "gpt-4o"
-    # Set NINEROUTER_URL / OPENAI_BASE_URL / NINEROUTER_KEY / OPENAI_API_KEY env vars
 }
