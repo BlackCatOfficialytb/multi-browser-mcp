@@ -11,7 +11,10 @@ from fastmcp import FastMCP
 from camoufox.async_api import AsyncCamoufox
 from DrissionPage import ChromiumPage, ChromiumOptions
 
-PROXIES_FILE = "proxies.txt"
+from config import get_config
+
+_cfg = get_config()
+PROXIES_FILE = _cfg.proxy.file
 
 
 def parse_proxy(url: str) -> dict:
@@ -51,8 +54,9 @@ class ProxyManager:
 
 class BrowserManager:
     def __init__(self):
-        self.active_engine: Literal["camoufox", "drissionpage"] = "camoufox"
-        self.drission_enabled: bool = False
+        self.active_engine: Literal["camoufox", "drissionpage"] = _cfg.browser.engine
+        self.drission_enabled: bool = _cfg.browser.drission_enabled
+        self.drission_headless: bool = _cfg.browser.drission_headless
         self.proxy = ProxyManager()
         self.proxy.load()
 
@@ -60,7 +64,7 @@ class BrowserManager:
         self.camoufox_browser = None
         self.camoufox_page = None
         self.browser_use_session = None
-        self.browser_use_headless: bool = True
+        self.browser_use_headless: bool = _cfg.browser_use.headless
         self.drission_page: Optional[ChromiumPage] = None
 
     async def init_camoufox(self):
@@ -123,7 +127,7 @@ def build_llm():
 
     base_url = os.environ.get("NINEROUTER_URL") or os.environ.get("OPENAI_BASE_URL")
     api_key = os.environ.get("NINEROUTER_KEY") or os.environ.get("OPENAI_API_KEY")
-    model = os.environ.get("BROWSER_USE_MODEL") or os.environ.get("NINEROUTER_MODEL") or "gpt-4o"
+    model = os.environ.get("BROWSER_USE_MODEL") or os.environ.get("NINEROUTER_MODEL") or _cfg.browser_use.model
     if base_url and not base_url.endswith("/v1"):
         base_url = base_url.rstrip("/") + "/v1"
     if not api_key:
@@ -292,10 +296,10 @@ async def close_browser() -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-browser automation MCP server (FastMCP).")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=_cfg.server.host)
+    parser.add_argument("--port", type=int, default=_cfg.server.port)
     parser.add_argument(
-        "--transport", choices=["sse", "http", "streamable-http", "stdio"], default="sse"
+        "--transport", choices=["sse", "http", "streamable-http", "stdio"], default=_cfg.server.transport
     )
     args = parser.parse_args()
     if args.transport == "stdio":

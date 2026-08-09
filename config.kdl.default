@@ -1,0 +1,26 @@
+# BrowserMCP server configuration (KDL format)
+# Docs: https://kdl.dev
+
+server {
+    host "127.0.0.1"
+    port 8000
+    transport "sse"
+}
+
+proxy {
+    enabled false
+    file "proxies.txt"
+}
+
+browser {
+    engine "camoufox"
+    drission_enabled false
+    drission_headless false
+}
+
+browser_use {
+    enabled true
+    headless true
+    model "gpt-4o"
+    # Set NINEROUTER_URL / OPENAI_BASE_URL / NINEROUTER_KEY / OPENAI_API_KEY env vars
+}
